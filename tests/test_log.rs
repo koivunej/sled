@@ -518,7 +518,7 @@ fn multiple_disjoint_flushes_async_std() {
                 db.insert("some_key", "any_value").unwrap();
                 barrier.wait();
                 let fut = async move {
-                    db.flush_async().await
+                    Verbose(db.flush_async()).await
                 };
 
                 (tempdir, async_std::task::spawn(fut))
