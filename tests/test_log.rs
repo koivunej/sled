@@ -380,3 +380,72 @@ fn multi_segment_log_iteration() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn multiple_disjoint_flushes() {
+    use futures::stream::StreamExt;
+    // derived from a test setup in rust-ipfs where multiple databases are opened separatedly
+
+    let (tx, rx) = std::sync::mpsc::channel();
+
+    let watcher = std::thread::spawn(move || {
+        loop {
+            if let Err(_) = rx.recv() {
+                break;
+            }
+            let last = std::time::Instant::now();
+
+            rx.recv_timeout(std::time::Duration::from_secs(5)).unwrap();
+            println!("{:?}", last.elapsed());
+        }
+    });
+
+    let mut rt = tokio::runtime::Builder::new().threaded_scheduler().build().unwrap();
+
+    // let mut join_handles = Vec::new();
+
+    for _ in 0..1000 {
+        let n = 7;
+
+        let barrier = std::sync::Arc::new(std::sync::Barrier::new(n));
+
+        let round = (0..n).map(|_| {
+            let barrier = barrier.clone();
+            let handle = rt.handle().to_owned();
+            std::thread::spawn(move || {
+                let tempdir =
+                    tempfile::TempDir::new().expect("tempdir creation failed");
+                let p = tempdir.path().to_owned();
+                let db = Config::new().create_new(true).path(p).open().unwrap();
+                db.insert("some_key", "any_value").unwrap();
+                barrier.wait();
+                let fut = async move {
+                    db.flush_async().await
+                };
+
+                handle.spawn(fut)
+            })
+        });
+
+        let join_handles = round.collect::<Vec<_>>();
+
+        tx.send(()).unwrap();
+
+        let mut all_futures = futures::stream::FuturesUnordered::new();
+
+        for jh in join_handles {
+            let task_handle = jh.join().unwrap();
+            all_futures.push(task_handle);
+        }
+
+        rt.block_on(async {
+            while let Some(res) = all_futures.next().await {
+                res.expect("spawned task completed").expect("sync succeeded");
+            }
+        });
+
+        tx.send(()).unwrap();
+    }
+
+    watcher.join().unwrap();
+}
