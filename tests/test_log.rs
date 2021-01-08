@@ -458,6 +458,81 @@ fn multiple_disjoint_flushes_tokio() {
     watcher.join().unwrap();
 }
 
+#[test]
+fn multiple_disjoint_flushes_tokio_blocking() {
+    use tempfile::TempDir;
+    use std::sync::{Arc, Barrier};
+    use std::time::{Instant, Duration};
+    use futures::stream::StreamExt;
+    // derived from a test setup in rust-ipfs where multiple databases are opened separatedly
+
+    let (tx, rx) = std::sync::mpsc::channel();
+
+    let watcher = std::thread::spawn(move || {
+        for round in 1.. {
+            if let Err(_) = rx.recv() {
+                break;
+            }
+
+            println!("{}: start", round);
+
+            let last = Instant::now();
+
+            rx.recv_timeout(Duration::from_secs(1)).expect("lockup");
+            println!("{}: {:?}", round, last.elapsed());
+        }
+    });
+
+    let rt = tokio::runtime::Builder::new_multi_thread().build().unwrap();
+
+    for _ in 0..1000 {
+        let n = 7;
+
+        let barrier = Arc::new(Barrier::new(n));
+
+        let round = (0..n).map(|_| {
+            let barrier = barrier.clone();
+            let handle = rt.handle().to_owned();
+            std::thread::spawn(move || {
+                let tempdir = TempDir::new().expect("tempdir creation failed");
+                let p = tempdir.path().to_owned();
+                let db = Config::new().create_new(true).path(p).open().unwrap();
+                db.insert("some_key", "any_value").unwrap();
+                barrier.wait();
+
+                let fut = handle.spawn_blocking(move || db.flush());
+
+                (tempdir, fut)
+            })
+        });
+
+        let join_handles = round.collect::<Vec<_>>();
+
+        tx.send(()).unwrap();
+
+        let mut all_futures = futures::stream::FuturesUnordered::new();
+
+        let mut tempdirs = Vec::new();
+
+        for jh in join_handles {
+            let (tempdir, task_handle) = jh.join().unwrap();
+            all_futures.push(task_handle);
+            tempdirs.push(tempdir);
+        }
+
+        rt.block_on(async {
+            while let Some(res) = all_futures.next().await {
+                res.expect("spawned task completed").expect("sync succeeded");
+            }
+        });
+
+        tx.send(()).unwrap();
+
+        tempdirs.into_iter().for_each(|tempdir| assert!(tempdir.path().exists()));
+    }
+
+    watcher.join().unwrap();
+}
 struct Verbose<F>(F);
 
 impl<F: std::future::Future> std::future::Future for Verbose<F> {
