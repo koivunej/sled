@@ -383,6 +383,9 @@ fn multi_segment_log_iteration() -> Result<()> {
 
 #[test]
 fn multiple_disjoint_flushes() {
+    use tempfile::TempDir;
+    use std::sync::{Arc, Barrier};
+    use std::time::{Instant, Duration};
     use futures::stream::StreamExt;
     // derived from a test setup in rust-ipfs where multiple databases are opened separatedly
 
@@ -393,28 +396,26 @@ fn multiple_disjoint_flushes() {
             if let Err(_) = rx.recv() {
                 break;
             }
-            let last = std::time::Instant::now();
 
-            rx.recv_timeout(std::time::Duration::from_secs(5)).unwrap();
+            let last = Instant::now();
+
+            rx.recv_timeout(Duration::from_secs(5)).unwrap();
             println!("{:?}", last.elapsed());
         }
     });
 
     let mut rt = tokio::runtime::Builder::new().threaded_scheduler().build().unwrap();
 
-    // let mut join_handles = Vec::new();
-
     for _ in 0..1000 {
         let n = 7;
 
-        let barrier = std::sync::Arc::new(std::sync::Barrier::new(n));
+        let barrier = Arc::new(Barrier::new(n));
 
         let round = (0..n).map(|_| {
             let barrier = barrier.clone();
             let handle = rt.handle().to_owned();
             std::thread::spawn(move || {
-                let tempdir =
-                    tempfile::TempDir::new().expect("tempdir creation failed");
+                let tempdir = TempDir::new().expect("tempdir creation failed");
                 let p = tempdir.path().to_owned();
                 let db = Config::new().create_new(true).path(p).open().unwrap();
                 db.insert("some_key", "any_value").unwrap();
