@@ -392,15 +392,17 @@ fn multiple_disjoint_flushes_tokio() {
     let (tx, rx) = std::sync::mpsc::channel();
 
     let watcher = std::thread::spawn(move || {
-        loop {
+        for round in 1.. {
             if let Err(_) = rx.recv() {
                 break;
             }
 
+            println!("{}: start", round);
+
             let last = Instant::now();
 
             rx.recv_timeout(Duration::from_secs(1)).expect("lockup");
-            println!("{:?}", last.elapsed());
+            println!("{}: {:?}", round, last.elapsed());
         }
     });
 
@@ -421,7 +423,7 @@ fn multiple_disjoint_flushes_tokio() {
                 db.insert("some_key", "any_value").unwrap();
                 barrier.wait();
                 let fut = async move {
-                    db.flush_async().await
+                    Verbose(db.flush_async()).await
                 };
 
                 handle.spawn(fut)
@@ -449,6 +451,31 @@ fn multiple_disjoint_flushes_tokio() {
     }
 
     watcher.join().unwrap();
+}
+
+struct Verbose<F>(F);
+
+impl<F: std::future::Future> std::future::Future for Verbose<F> {
+    type Output = F::Output;
+
+    fn poll(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Self::Output> {
+        use std::task::Poll::*;
+        let pinned = &*self as *const _;
+        let inner = unsafe { self.map_unchecked_mut(|s| &mut s.0) };
+        match inner.poll(cx) {
+            Pending => {
+                println!("polled pending: {:p}", pinned);
+                return Pending;
+            }
+            Ready(t) => {
+                println!("polled read: {:p}", pinned);
+                return Ready(t);
+            }
+        }
+    }
 }
 
 #[test]
