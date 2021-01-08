@@ -382,7 +382,7 @@ fn multi_segment_log_iteration() -> Result<()> {
 }
 
 #[test]
-fn multiple_disjoint_flushes() {
+fn multiple_disjoint_flushes_tokio() {
     use tempfile::TempDir;
     use std::sync::{Arc, Barrier};
     use std::time::{Instant, Duration};
@@ -442,6 +442,73 @@ fn multiple_disjoint_flushes() {
         rt.block_on(async {
             while let Some(res) = all_futures.next().await {
                 res.expect("spawned task completed").expect("sync succeeded");
+            }
+        });
+
+        tx.send(()).unwrap();
+    }
+
+    watcher.join().unwrap();
+}
+
+#[test]
+fn multiple_disjoint_flushes_async_std() {
+    use tempfile::TempDir;
+    use std::sync::{Arc, Barrier};
+    use std::time::{Instant, Duration};
+    use futures::stream::StreamExt;
+    // derived from a test setup in rust-ipfs where multiple databases are opened separatedly
+
+    let (tx, rx) = std::sync::mpsc::channel();
+
+    let watcher = std::thread::spawn(move || {
+        loop {
+            if let Err(_) = rx.recv() {
+                break;
+            }
+
+            let last = Instant::now();
+
+            rx.recv_timeout(Duration::from_secs(1)).expect("lockup");
+            println!("{:?}", last.elapsed());
+        }
+    });
+
+    for _ in 0..1000 {
+        let n = 7;
+
+        let barrier = Arc::new(Barrier::new(n));
+
+        let round = (0..n).map(|_| {
+            let barrier = barrier.clone();
+            std::thread::spawn(move || {
+                let tempdir = TempDir::new().expect("tempdir creation failed");
+                let p = tempdir.path().to_owned();
+                let db = Config::new().create_new(true).path(p).open().unwrap();
+                db.insert("some_key", "any_value").unwrap();
+                barrier.wait();
+                let fut = async move {
+                    db.flush_async().await
+                };
+
+                async_std::task::spawn(fut)
+            })
+        });
+
+        let join_handles = round.collect::<Vec<_>>();
+
+        tx.send(()).unwrap();
+
+        let mut all_futures = futures::stream::FuturesUnordered::new();
+
+        for jh in join_handles {
+            let task_handle = jh.join().unwrap();
+            all_futures.push(task_handle);
+        }
+
+        async_std::task::block_on(async {
+            while let Some(res) = all_futures.next().await {
+                res.expect("sync succeeded");
             }
         });
 
