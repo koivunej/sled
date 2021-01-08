@@ -399,7 +399,7 @@ fn multiple_disjoint_flushes() {
 
             let last = Instant::now();
 
-            rx.recv_timeout(Duration::from_secs(5)).unwrap();
+            rx.recv_timeout(Duration::from_secs(1)).expect("lockup");
             println!("{:?}", last.elapsed());
         }
     });
