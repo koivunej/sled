@@ -426,7 +426,7 @@ fn multiple_disjoint_flushes_tokio() {
                     Verbose(db.flush_async()).await
                 };
 
-                handle.spawn(fut)
+                (tempdir, handle.spawn(fut))
             })
         });
 
@@ -436,9 +436,12 @@ fn multiple_disjoint_flushes_tokio() {
 
         let mut all_futures = futures::stream::FuturesUnordered::new();
 
+        let mut tempdirs = Vec::new();
+
         for jh in join_handles {
-            let task_handle = jh.join().unwrap();
+            let (tempdir, task_handle) = jh.join().unwrap();
             all_futures.push(task_handle);
+            tempdirs.push(tempdir);
         }
 
         rt.block_on(async {
@@ -518,7 +521,7 @@ fn multiple_disjoint_flushes_async_std() {
                     db.flush_async().await
                 };
 
-                async_std::task::spawn(fut)
+                (tempdir, async_std::task::spawn(fut))
             })
         });
 
@@ -528,9 +531,12 @@ fn multiple_disjoint_flushes_async_std() {
 
         let mut all_futures = futures::stream::FuturesUnordered::new();
 
+        let mut tempdirs = Vec::new();
+
         for jh in join_handles {
-            let task_handle = jh.join().unwrap();
+            let (tempdir, task_handle) = jh.join().unwrap();
             all_futures.push(task_handle);
+            tempdirs.push(tempdir);
         }
 
         async_std::task::block_on(async {
