@@ -451,6 +451,8 @@ fn multiple_disjoint_flushes_tokio() {
         });
 
         tx.send(()).unwrap();
+
+        tempdirs.into_iter().for_each(|tempdir| assert!(tempdir.path().exists()));
     }
 
     watcher.join().unwrap();
@@ -546,6 +548,8 @@ fn multiple_disjoint_flushes_async_std() {
         });
 
         tx.send(()).unwrap();
+
+        tempdirs.into_iter().for_each(|tempdir| assert!(tempdir.path().exists()));
     }
 
     watcher.join().unwrap();
