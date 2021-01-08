@@ -404,7 +404,7 @@ fn multiple_disjoint_flushes() {
         }
     });
 
-    let mut rt = tokio::runtime::Builder::new().threaded_scheduler().build().unwrap();
+    let rt = tokio::runtime::Builder::new_multi_thread().build().unwrap();
 
     for _ in 0..1000 {
         let n = 7;
