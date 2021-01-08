@@ -474,7 +474,7 @@ impl<F: std::future::Future> std::future::Future for Verbose<F> {
                 return Pending;
             }
             Ready(t) => {
-                println!("polled read: {:p}", pinned);
+                println!("polled ready: {:p}", pinned);
                 return Ready(t);
             }
         }
