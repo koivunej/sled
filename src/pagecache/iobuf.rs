@@ -877,11 +877,11 @@ impl IoBufs {
                 // lower.
                 self.config.event_log.stabilized_lsn(new_stable_lsn + 1);
             }
-
-            // having held the mutex makes this linearized
-            // with the notify below.
-            drop(intervals);
         }
+
+        // having held the mutex makes this linearized
+        // with the notify below.
+        drop(intervals);
         let _notified = self.interval_updated.notify_all();
 
         trace!("notified {}", _notified);
