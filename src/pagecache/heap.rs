@@ -120,7 +120,7 @@ impl Drop for Reservation {
 
 impl Reservation {
     pub fn complete(mut self, data: &[u8]) -> Result<HeapId> {
-        log::trace!(
+        tracing::trace!(
             "Heap::complete({:?}) to offset {} in file {:?}",
             self.heap_id,
             self.heap_id.offset(),
@@ -239,7 +239,7 @@ impl Heap {
         heap_id: HeapId,
         use_compression: bool,
     ) -> Result<(MessageKind, Vec<u8>)> {
-        log::trace!("Heap::read({:?})", heap_id);
+        tracing::trace!("Heap::read({:?})", heap_id);
         let (slab_id, slab_idx, original_lsn) = heap_id.decompose();
         self.slabs[slab_id as usize].read(
             slab_idx,
@@ -249,7 +249,7 @@ impl Heap {
     }
 
     pub fn free(&self, heap_id: HeapId) {
-        log::trace!("Heap::free({:?})", heap_id);
+        tracing::trace!("Heap::free({:?})", heap_id);
         let (slab_id, slab_idx, _) = heap_id.decompose();
         self.slabs[slab_id as usize].free(slab_idx)
     }
@@ -258,7 +258,7 @@ impl Heap {
         assert!(size < 1 << 48);
         let slab_id = size_to_slab_id(size);
         let ret = self.slabs[slab_id as usize].reserve(original_lsn);
-        log::trace!("Heap::reserve({}) -> {:?}", size, ret.heap_id);
+        tracing::trace!("Heap::reserve({}) -> {:?}", size, ret.heap_id);
         ret
     }
 }
@@ -285,7 +285,7 @@ impl Slab {
             options.open(directory.as_ref().join(format!("{:02}", slab_id)))?;
         let len = file.metadata()?.len();
         let max_idx = len / bs;
-        log::trace!(
+        tracing::trace!(
             "starting heap slab for sizes of {}. tip: {} max idx: {}",
             bs,
             len,
@@ -305,7 +305,11 @@ impl Slab {
         let bs = slab_id_to_size(self.slab_id);
         let offset = u64::from(slab_idx) * bs;
 
-        log::trace!("reading heap slab slot {} at offset {}", slab_idx, offset);
+        tracing::trace!(
+            "reading heap slab slot {} at offset {}",
+            slab_idx,
+            offset
+        );
 
         let mut heap_buf = vec![0; usize::try_from(bs).unwrap()];
 
@@ -324,7 +328,7 @@ impl Slab {
                 heap_buf[5..13].as_ref().try_into().unwrap(),
             );
             if actual_lsn != original_lsn {
-                log::debug!(
+                tracing::debug!(
                     "heap slot lsn {} does not match expected original lsn {}",
                     actual_lsn,
                     original_lsn
@@ -339,7 +343,7 @@ impl Slab {
             };
             Ok((MessageKind::from(heap_buf[0]), buf))
         } else {
-            log::debug!(
+            tracing::debug!(
                 "heap message CRC does not match contents. stored: {} actual: {}",
                 stored_crc,
                 actual_crc
@@ -350,21 +354,21 @@ impl Slab {
 
     fn reserve(&self, original_lsn: Lsn) -> Reservation {
         let (idx, from_tip) = if let Some(idx) = self.free.pop(&pin()) {
-            log::trace!(
+            tracing::trace!(
                 "reusing heap index {} in slab for sizes of {}",
                 idx,
                 slab_id_to_size(self.slab_id),
             );
             (idx, false)
         } else {
-            log::trace!(
+            tracing::trace!(
                 "no free heap slots in slab for sizes of {}",
                 slab_id_to_size(self.slab_id),
             );
             (self.tip.fetch_add(1, Acquire), true)
         };
 
-        log::trace!(
+        tracing::trace!(
             "heap reservation for slot {} in the slab for sizes of {}",
             idx,
             slab_id_to_size(self.slab_id),
@@ -418,7 +422,7 @@ impl Slab {
 
                 if ret != 0 {
                     let err = std::io::Error::last_os_error();
-                    log::error!(
+                    tracing::error!(
                         "failed to punch hole in heap file: {:?}. disabling hole punching",
                         err
                     );

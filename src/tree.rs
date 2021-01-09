@@ -2374,7 +2374,7 @@ impl Tree {
                     if let Some(next_pid) = left_node.iter_index_pids().next() {
                         pid = next_pid;
                         left_most = next_pid;
-                        log::trace!("set left_most to {}", next_pid);
+                        tracing::trace!("set left_most to {}", next_pid);
                         level += 1;
                         f.push_str(&format!("\n\tlevel {}:\n", level));
                         assert!(
@@ -2421,7 +2421,7 @@ impl Debug for Tree {
                 "failed to fmt Tree due to expected page disappearing part-way through"
             );
         } else {
-            log::error!(
+            tracing::error!(
                 "failed to fmt Tree due to expected page disappearing part-way through"
             );
             Ok(())

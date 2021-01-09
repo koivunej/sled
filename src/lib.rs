@@ -333,7 +333,6 @@ use {
         tree::TreeInner,
     },
     crossbeam_utils::{Backoff, CachePadded},
-    log::{debug, error, trace, warn},
     pagecache::RecoveryGuard,
     parking_lot::{Condvar, Mutex, RwLock},
     std::{
@@ -346,6 +345,7 @@ use {
             Ordering::{Acquire, Release, SeqCst},
         },
     },
+    tracing::{debug, error, trace, warn},
 };
 
 #[doc(hidden)]

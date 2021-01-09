@@ -41,7 +41,7 @@ fn init_queue() -> Queue {
     for _ in 0..DESIRED_WAITING_THREADS {
         debug_delay();
         if let Err(e) = spawn_new_thread(true) {
-            log::error!("failed to initialize threadpool: {:?}", e);
+            tracing::error!("failed to initialize threadpool: {:?}", e);
         }
     }
     Queue { cv: Condvar::new(), mu: Mutex::new(VecDeque::new()) }

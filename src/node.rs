@@ -623,7 +623,7 @@ impl Node {
         new_item: Option<(&[u8], &[u8])>,
         replace: bool,
     ) -> Node {
-        log::trace!(
+        tracing::trace!(
             "stitching item {:?} replace: {} index: {} \
             into node {:?}",
             new_item,
@@ -1046,7 +1046,7 @@ impl Node {
     }
 
     fn remove_index(&self, index: usize) -> Node {
-        log::trace!("removing index {} for node {:?}", index, self);
+        tracing::trace!("removing index {} for node {:?}", index, self);
         assert!(self.children() > index);
         self.stitch(index, None, true)
     }
@@ -1167,14 +1167,14 @@ impl Node {
         let split_key = self.prefix_decode(possibly_truncated_split_key);
 
         if untruncated_split_key.len() != possibly_truncated_split_key.len() {
-            log::trace!(
+            tracing::trace!(
                 "shaving off {} bytes for split key",
                 untruncated_split_key.len()
                     - possibly_truncated_split_key.len()
             );
         }
 
-        log::trace!(
+        tracing::trace!(
             "splitting node with lo: {:?} split_key: {:?} hi: {:?}",
             self.lo(),
             split_key,
@@ -1237,7 +1237,7 @@ impl Node {
         right.probation_ops_remaining =
             tf!((self.children() / 2).min(std::u8::MAX as usize), u8);
 
-        log::trace!(
+        tracing::trace!(
             "splitting node {:?} into left: {:?} and right: {:?}",
             self,
             left,
@@ -1438,7 +1438,7 @@ impl Node {
             assert!(hi > key);
         }
         assert!(self.is_index);
-        log::trace!("index_next_node for key {:?} on node {:?}", key, self);
+        tracing::trace!("index_next_node for key {:?} on node {:?}", key, self);
         let idx = match self.find(&key[self.prefix_len as usize..]) {
             Ok(idx) => idx,
             Err(idx) => idx - 1,
@@ -1451,7 +1451,7 @@ impl Node {
 
         let encoded_sep = &at[self.prefix_len as usize..];
         if self.contains_key(encoded_sep) {
-            log::debug!(
+            tracing::debug!(
                 "parent_split skipped because \
                 parent already contains child with key {:?} \
                 at split point due to deep race",
@@ -1773,7 +1773,7 @@ impl Node {
 
         for i in 0..self.children() - 1 {
             if self.index_key(i) >= self.index_key(i + 1) {
-                log::error!(
+                tracing::error!(
                     "key {:?} at index {} >= key {:?} at index {}",
                     self.index_key(i),
                     i,

@@ -913,7 +913,7 @@ impl PageCache {
                         let s2: PageCache = self.clone();
                         threadpool::spawn(move || {
                             if let Err(e) = s2.take_fuzzy_snapshot() {
-                                log::error!(
+                                tracing::error!(
                                     "failed to write snapshot: {:?}",
                                     e
                                 );
@@ -950,7 +950,7 @@ impl PageCache {
         let _measure = Measure::new(&M.fuzzy_snapshot);
         let lock = self.snapshot_lock.try_lock();
         if lock.is_none() {
-            log::debug!(
+            tracing::debug!(
                 "skipping snapshot because the snapshot lock is already claimed"
             );
             return Ok(());
