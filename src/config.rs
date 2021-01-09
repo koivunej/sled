@@ -359,6 +359,7 @@ impl Config {
             inner: config,
             file: Arc::new(file),
             heap: Arc::new(heap),
+            span: tracing::Span::current(),
         };
 
         Db::start_inner(config)
@@ -781,6 +782,7 @@ pub struct RunningConfig {
     inner: Config,
     pub(crate) file: Arc<File>,
     pub(crate) heap: Arc<Heap>,
+    pub(crate) span: tracing::Span,
 }
 
 impl Deref for RunningConfig {

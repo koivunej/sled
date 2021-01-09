@@ -97,6 +97,8 @@ pub struct TreeInner {
 
 impl Drop for TreeInner {
     fn drop(&mut self) {
+        let span = tracing::trace_span!(parent: &self.context.config.span, "Tree::drop");
+        let _g = span.enter();
         // Flush the underlying system in a loop until we
         // have flushed all dirty data.
         loop {
@@ -149,6 +151,9 @@ impl Tree {
         K: AsRef<[u8]>,
         V: Into<IVec>,
     {
+        let span = tracing::trace_span!(parent: &self.context.config.span, "insert");
+        let _g = span.enter();
+
         let value = value.into();
         let mut guard = pin();
         let _cc = concurrency_control::read();
@@ -350,6 +355,8 @@ impl Tree {
             &transaction::TransactionalTree,
         ) -> transaction::ConflictableTransactionResult<A, E>,
     {
+        let span = tracing::trace_span!(parent: &self.context.config.span, "transaction");
+        let _g = span.enter();
         Transactional::transaction(&self, f)
     }
 
@@ -380,6 +387,8 @@ impl Tree {
     /// # Ok(()) }
     /// ```
     pub fn apply_batch(&self, batch: Batch) -> Result<()> {
+        let span = tracing::trace_span!(parent: &self.context.config.span, "apply_batch");
+        let _g = span.enter();
         let _cc = concurrency_control::write();
         let mut guard = pin();
         self.apply_batch_inner(batch, None, &mut guard)
@@ -449,6 +458,8 @@ impl Tree {
     /// # Ok(()) }
     /// ```
     pub fn get<K: AsRef<[u8]>>(&self, key: K) -> Result<Option<IVec>> {
+        let span = tracing::trace_span!(parent: &self.context.config.span, "get");
+        let _g = span.enter();
         let mut guard = pin();
         let _cc = concurrency_control::read();
         loop {
@@ -481,6 +492,8 @@ impl Tree {
     /// # Ok(()) }
     /// ```
     pub fn get_zero_copy<K: AsRef<[u8]>, B, F: FnOnce(Option<&[u8]>) -> B>(&self, key: K, f: F) -> Result<B> {
+        let span = tracing::trace_span!(parent: &self.context.config.span, "get_zero_copy");
+        let _g = span.enter();
         let mut guard = pin();
         let _cc = concurrency_control::read();
 
@@ -540,6 +553,8 @@ impl Tree {
     /// # Ok(()) }
     /// ```
     pub fn remove<K: AsRef<[u8]>>(&self, key: K) -> Result<Option<IVec>> {
+        let span = tracing::trace_span!(parent: &self.context.config.span, "remove");
+        let _g = span.enter();
         let mut guard = pin();
         let _cc = concurrency_control::read();
         loop {
@@ -615,6 +630,8 @@ impl Tree {
         OV: AsRef<[u8]>,
         NV: Into<IVec>,
     {
+        let span = tracing::trace_span!(parent: &self.context.config.span, "compare_and_swap");
+        let _g = span.enter();
         trace!("cas'ing key {:?}", key.as_ref());
         let _measure = Measure::new(&M.tree_cas);
 
@@ -738,6 +755,8 @@ impl Tree {
         F: FnMut(Option<&[u8]>) -> Option<V>,
         V: Into<IVec>,
     {
+        let span = tracing::trace_span!(parent: &self.context.config.span, "update_and_fetch");
+        let _g = span.enter();
         let key_ref = key.as_ref();
         let mut current = self.get(key_ref)?;
 
@@ -811,6 +830,8 @@ impl Tree {
         F: FnMut(Option<&[u8]>) -> Option<V>,
         V: Into<IVec>,
     {
+        let span = tracing::trace_span!(parent: &self.context.config.span, "fetch_and_update");
+        let _g = span.enter();
         let key_ref = key.as_ref();
         let mut current = self.get(key_ref)?;
 
@@ -901,6 +922,8 @@ impl Tree {
     /// realistic sustained workloads running on realistic
     /// hardware.
     pub fn flush(&self) -> Result<usize> {
+        let span = tracing::trace_span!(parent: &self.context.config.span, "Tree::flush");
+        let _g = span.enter();
         self.context.pagecache.flush()
     }
 
@@ -917,9 +940,10 @@ impl Tree {
     // this clippy check is mis-firing on async code.
     #[allow(clippy::used_underscore_binding)]
     pub async fn flush_async(&self) -> Result<usize> {
+        let span = tracing::trace_span!(parent: &self.context.config.span, "Tree::flush_async");
         let pagecache = self.context.pagecache.clone();
         if let Some(result) =
-            threadpool::spawn(move || pagecache.flush())?.await
+            threadpool::spawn(move || pagecache.flush(), &span)?.await
         {
             result
         } else {

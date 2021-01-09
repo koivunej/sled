@@ -564,6 +564,8 @@ impl Drop for PageCacheInner {
 impl PageCache {
     /// Instantiate a new `PageCache`.
     pub(crate) fn start(config: RunningConfig) -> Result<PageCache> {
+        let span = tracing::trace_span!(parent: &config.span, "PageCache::start");
+        let _g = span.enter();
         trace!("starting pagecache");
 
         config.reset_global_error();
@@ -774,6 +776,8 @@ impl PageCache {
         new: Link,
         guard: &'g Guard,
     ) -> Result<CasResult<'g, Link>> {
+        let span = tracing::trace_span!(parent: &self.config.span, "PageCacheInner::Link");
+        let _g = span.enter();
         let _measure = Measure::new(&M.link_page);
 
         trace!("linking pid {} with {:?}", pid, new);
@@ -911,14 +915,17 @@ impl PageCache {
                         && link_count % self.config.snapshot_after_ops == 0
                     {
                         let s2: PageCache = self.clone();
-                        threadpool::spawn(move || {
-                            if let Err(e) = s2.take_fuzzy_snapshot() {
-                                tracing::error!(
-                                    "failed to write snapshot: {:?}",
-                                    e
-                                );
-                            }
-                        })?;
+                        threadpool::spawn(
+                            move || {
+                                if let Err(e) = s2.take_fuzzy_snapshot() {
+                                    tracing::error!(
+                                        "failed to write snapshot: {:?}",
+                                        e
+                                    );
+                                }
+                            },
+                            &span,
+                        )?;
                     }
 
                     return Ok(Ok(old));

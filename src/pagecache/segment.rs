@@ -1111,6 +1111,9 @@ impl SegmentAccountant {
 
     // truncate the file to the desired length
     fn truncate(&mut self, at: LogOffset) -> Result<()> {
+        let span = tracing::trace_span!(parent: &self.config.span, "truncate");
+        let _g = span.enter();
+
         trace!("asynchronously truncating file to length {}", at);
 
         assert_eq!(
@@ -1136,7 +1139,7 @@ impl SegmentAccountant {
                 .and_then(|_| config.file.sync_all())
                 .map_err(|e| e.into());
             completer.fill(res);
-        })?;
+        }, &span)?;
 
         if self.async_truncations.insert(at, promise).is_some() {
             panic!(

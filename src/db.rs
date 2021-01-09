@@ -59,6 +59,8 @@ impl Db {
     }
 
     pub(crate) fn start_inner(config: RunningConfig) -> Result<Self> {
+        let span = tracing::trace_span!(parent: &config.span, "start_inner");
+        let _g = span.enter();
         let _measure = Measure::new(&M.tree_start);
 
         let context = Context::start(config)?;
@@ -77,11 +79,13 @@ impl Db {
         ))]
         {
             let flusher_pagecache = context.pagecache.clone();
+            let span = context.config.span.clone();
             let flusher = context.flush_every_ms.map(move |fem| {
                 flusher::Flusher::new(
                     "log flusher".to_owned(),
                     flusher_pagecache,
                     fem,
+                    &span,
                 )
             });
             *context.flusher.lock() = flusher;
@@ -127,6 +131,9 @@ impl Db {
     /// Open or create a new disk-backed Tree with its own keyspace,
     /// accessible from the `Db` via the provided identifier.
     pub fn open_tree<V: AsRef<[u8]>>(&self, name: V) -> Result<Tree> {
+        let span =
+            tracing::trace_span!(parent: &self.context.span, "open_tree");
+        let _g = span.enter();
         let name_ref = name.as_ref();
         let tenants = self.tenants.read();
         if let Some(tree) = tenants.get(name_ref) {
@@ -153,6 +160,10 @@ impl Db {
 
     /// Remove a disk-backed collection. This is blocking and fairly slow.
     pub fn drop_tree<V: AsRef<[u8]>>(&self, name: V) -> Result<bool> {
+        let span =
+            tracing::trace_span!(parent: &self.context.span, "drop_tree");
+        let _g = span.enter();
+
         let name_ref = name.as_ref();
         if name_ref == DEFAULT_TREE_ID {
             return Err(Error::Unsupported(

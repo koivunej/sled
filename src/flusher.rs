@@ -27,6 +27,7 @@ pub(crate) struct Flusher {
     shutdown: Arc<Mutex<ShutdownState>>,
     sc: Arc<Condvar>,
     join_handle: Mutex<Option<std::thread::JoinHandle<()>>>,
+    span: tracing::Span,
 }
 
 impl Flusher {
@@ -35,21 +36,27 @@ impl Flusher {
         name: String,
         pagecache: PageCache,
         flush_every_ms: u64,
+        parent_span: &tracing::Span,
     ) -> Self {
         #[allow(clippy::mutex_atomic)] // mutex used in CondVar below
         let shutdown = Arc::new(Mutex::new(ShutdownState::Running));
         let sc = Arc::new(Condvar::new());
 
+        let span = tracing::trace_span!(parent: parent_span, "flusher");
         let join_handle = thread::Builder::new()
             .name(name)
             .spawn({
                 let shutdown = shutdown.clone();
                 let sc = sc.clone();
-                move || run(&shutdown, &sc, &pagecache, flush_every_ms)
+                let span = span.clone();
+                move || {
+                    let _g = span.enter();
+                    run(&shutdown, &sc, &pagecache, flush_every_ms)
+                }
             })
             .unwrap();
 
-        Self { shutdown, sc, join_handle: Mutex::new(Some(join_handle)) }
+        Self { shutdown, sc, join_handle: Mutex::new(Some(join_handle)), span }
     }
 }
 
@@ -161,6 +168,7 @@ fn run(
 
 impl Drop for Flusher {
     fn drop(&mut self) {
+        let _g = self.span.enter();
         let mut shutdown = self.shutdown.lock();
         if shutdown.is_running() {
             *shutdown = ShutdownState::ShuttingDown;

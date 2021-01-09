@@ -4,7 +4,7 @@ use super::*;
 #[doc(hidden)]
 pub struct Context {
     // TODO file from config should be in here
-    config: RunningConfig,
+    pub(crate) config: RunningConfig,
     /// Periodically flushes dirty data. We keep this in an
     /// Arc separate from the PageCache below to separate
     /// "high-level" references from Db, Tree etc... from

@@ -200,14 +200,16 @@ fn spawn_new_thread(is_immortal: bool) -> Result<()> {
 }
 
 /// Spawn a function on the threadpool.
-pub fn spawn<F, R>(work: F) -> Result<OneShot<R>>
+pub fn spawn<F, R>(work: F, parent_span: &tracing::Span) -> Result<OneShot<R>>
 where
     F: FnOnce() -> R + Send + 'static,
     R: Send + 'static + Sized,
 {
     SUBMITTED.fetch_add(1, Acquire);
     let (promise_filler, promise) = OneShot::pair();
+    let span = tracing::trace_span!(parent: parent_span, "threadpool");
     let task = move || {
+        let _g = span.enter();
         promise_filler.fill((work)());
     };
 

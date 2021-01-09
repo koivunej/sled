@@ -8,7 +8,7 @@ use tempfile::TempDir;
 /// Reproduction for issue #1241, just `cargo run --example repro` and you should see a lockup.
 /// After what seems to be a lockup, the process will hang in order to have a debugger attached.
 fn main() {
-    env_logger::init();
+    tracing_subscriber::fmt::init();
     // derived from a test setup in rust-ipfs where multiple databases are opened separatedly
 
     let (tx, rx) = std::sync::mpsc::channel();
@@ -43,18 +43,22 @@ fn main() {
         .name(String::from("repro spawner"))
         .spawn(move || {
             for _ in 0.. {
-                let n = 7;
+                let n = 7 as u8;
 
                 let use_async = true;
 
-                let barrier = Arc::new(Barrier::new(n));
+                let barrier = Arc::new(Barrier::new(n as usize));
 
                 // each thread creates a new database to a new tempdir, followed by a write and flush_async
                 // future
-                let round = (0..n).map(|_| {
+                let round = (0..n).map(|n| {
                     let barrier = barrier.clone();
                     let handle = rt.handle().to_owned();
                     std::thread::spawn(move || {
+                        let name = (n + b'a') as char;
+                        let span = tracing::trace_span!("t", "db" = %name);
+                        let _g = span.enter();
+
                         let tempdir = TempDir::new().expect("tempdir creation failed");
                         let p = tempdir.path().to_owned();
                         let db = Config::new().create_new(true).path(p).open().unwrap();

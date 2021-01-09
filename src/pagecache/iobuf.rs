@@ -1093,6 +1093,9 @@ pub(in crate::pagecache) fn maybe_seal_and_write_iobuf(
         return Ok(());
     }
 
+    let span = tracing::trace_span!("maybe_seal_and_write_iobuf");
+    let _g = span.enter();
+
     // NB need to do this before CAS because it can get
     // written and reset by another thread afterward
     let lid = iobuf.offset;
@@ -1266,7 +1269,7 @@ pub(in crate::pagecache) fn maybe_seal_and_write_iobuf(
 
                 let _notified = iobufs.interval_updated.notify_all();
             }
-        })?;
+        }, &span)?;
 
         #[cfg(feature = "event_log")]
         _result.wait();

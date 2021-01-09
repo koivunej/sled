@@ -454,15 +454,18 @@ impl Log {
             );
             let iobufs = self.iobufs.clone();
             let iobuf = iobuf.clone();
-            threadpool::spawn(move || {
-                if let Err(e) = iobufs.write_to_log(&iobuf) {
-                    error!(
-                        "hit error while writing iobuf with lsn {}: {:?}",
-                        lsn, e
-                    );
-                    iobufs.config.set_global_error(e);
-                }
-            })?;
+            threadpool::spawn(
+                move || {
+                    if let Err(e) = iobufs.write_to_log(&iobuf) {
+                        error!(
+                            "hit error while writing iobuf with lsn {}: {:?}",
+                            lsn, e
+                        );
+                        iobufs.config.set_global_error(e);
+                    }
+                },
+                &tracing::Span::current(),
+            )?;
 
             Ok(())
         } else {
@@ -473,6 +476,9 @@ impl Log {
 
 impl Drop for Log {
     fn drop(&mut self) {
+        let span = tracing::trace_span!(parent: &self.config.span, "Log::drop");
+        let _g = span.enter();
+
         // don't do any more IO if we're crashing
         if self.config.global_error().is_err() {
             return;

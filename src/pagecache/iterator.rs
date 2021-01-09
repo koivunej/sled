@@ -313,6 +313,9 @@ fn scan_segment_headers_and_tail(
         }
     }
 
+    let span = tracing::trace_span!(parent: &config.span, "scan_segment_headers_and_tail");
+    let _g = span.enter();
+
     let segment_len = LogOffset::try_from(config.segment_size).unwrap();
 
     let f = &config.file;
@@ -336,12 +339,16 @@ fn scan_segment_headers_and_tail(
     // scatter
     let header_promises_res: Result<Vec<_>> = (0..segments)
         .map({
+            let span = span.clone();
             // let config = config.clone();
             move |idx| {
-                threadpool::spawn({
-                    let config = config.clone();
-                    move || fetch(idx, min, &config)
-                })
+                threadpool::spawn(
+                    {
+                        let config = config.clone();
+                        move || fetch(idx, min, &config)
+                    },
+                    &span,
+                )
             }
         })
         .collect();
