@@ -45,6 +45,8 @@ fn main() {
             for _ in 0.. {
                 let n = 7;
 
+                let use_async = true;
+
                 let barrier = Arc::new(Barrier::new(n));
 
                 // each thread creates a new database to a new tempdir, followed by a write and flush_async
@@ -57,14 +59,22 @@ fn main() {
                         let p = tempdir.path().to_owned();
                         let db = Config::new().create_new(true).path(p).open().unwrap();
                         db.insert("some_key", "any_value").unwrap();
-                        barrier.wait();
-                        let fut = async move {
-                            Verbose(db.flush_async()).await
-                        };
 
-                        // keep the tempdir alive not to remove it on drop (it doesn't seem to matter, but
-                        // just to filter it out).
-                        (tempdir, handle.spawn(fut))
+                        // moving the barrier above db.insert might make the lockup more rare, but
+                        // it is still hit.
+                        barrier.wait();
+
+                        if use_async {
+                            let fut = async move {
+                                Verbose(db.flush_async()).await
+                            };
+                            // keep the tempdir alive not to remove it on drop (it doesn't seem to matter, but
+                            // just to filter it out).
+                            (tempdir, Some(handle.spawn(fut)))
+                        } else {
+                            let _ = db.flush().unwrap();
+                            (tempdir, None)
+                        }
                     })
                 });
 
@@ -80,7 +90,9 @@ fn main() {
 
                 for jh in join_handles {
                     let (tempdir, task_handle) = jh.join().unwrap();
-                    all_futures.push(task_handle);
+                    if let Some(task_handle) = task_handle {
+                        all_futures.push(task_handle);
+                    }
                     tempdirs.push(tempdir);
                 }
 
@@ -110,7 +122,8 @@ fn main() {
                 let res = spawner.join();
                 drop(tx);
                 res
-            }})
+            }
+        })
         .unwrap();
 
     // wait for waiter to start
