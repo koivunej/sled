@@ -8,6 +8,7 @@ use sled::Config;
 /// Reproduction for issue #1241, just `cargo run --example repro` and you should see a lockup.
 /// After what seems to be a lockup, the process will hang in order to have a debugger attached.
 fn main() {
+    env_logger::init();
     // derived from a test setup in rust-ipfs where multiple databases are opened separatedly
 
     let (tx, rx) = std::sync::mpsc::channel();
@@ -120,6 +121,9 @@ fn main() {
 
     // now ready to have a debugger attached
     println!("---");
+    if std::env::var_os("RUST_LOG").is_none() {
+        println!("RUST_LOG is unset, try setting it to enable logging");
+    }
     #[cfg(feature = "testing")]
     {
         println!("feature \"testing\" detected: note the stacktraces will be different from runs without the feature.");
@@ -130,7 +134,6 @@ fn main() {
     rx.recv().unwrap_err();
 
     unreachable!("spawner thread should had never completed")
-
 }
 
 /// Wrapper to println on calls to [`Future::poll`]
