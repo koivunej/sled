@@ -1,9 +1,9 @@
-use tempfile::TempDir;
-use std::sync::{Arc, Barrier};
-use std::time::{Instant, Duration};
-use std::thread::Builder as ThreadBuilder;
-use futures::stream::{StreamExt, FuturesUnordered};
+use futures::stream::{FuturesUnordered, StreamExt};
 use sled::Config;
+use std::sync::{Arc, Barrier};
+use std::thread::Builder as ThreadBuilder;
+use std::time::{Duration, Instant};
+use tempfile::TempDir;
 
 /// Reproduction for issue #1241, just `cargo run --example repro` and you should see a lockup.
 /// After what seems to be a lockup, the process will hang in order to have a debugger attached.
