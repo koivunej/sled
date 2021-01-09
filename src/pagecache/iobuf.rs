@@ -315,6 +315,8 @@ pub(crate) struct IoBufs {
     pub submission_mutex: Mutex<()>,
     #[cfg(feature = "io_uring")]
     pub io_uring: rio::Rio,
+
+    flush_waiters: AtomicUsize,
 }
 
 impl Drop for IoBufs {
@@ -422,6 +424,7 @@ impl IoBufs {
             submission_mutex: Mutex::new(()),
             #[cfg(feature = "io_uring")]
             io_uring: rio::new()?,
+            flush_waiters: AtomicUsize::new(0),
         })
     }
 
@@ -816,6 +819,8 @@ impl IoBufs {
                 complete_len
             );
             self.mark_interval(base_lsn, complete_len);
+        } else {
+            trace!("skipping marking interval as total_len = {}", total_len);
         }
 
         M.written_bytes.measure(total_len as u64);
@@ -878,6 +883,8 @@ impl IoBufs {
             drop(intervals);
         }
         let _notified = self.interval_updated.notify_all();
+
+        trace!("notified {}", _notified);
     }
 
     pub(in crate::pagecache) fn current_iobuf(&self) -> Arc<IoBuf> {
@@ -900,7 +907,12 @@ pub(crate) fn roll_iobuf(iobufs: &Arc<IoBufs>) -> Result<usize> {
         return Ok(0);
     }
     if header::offset(header) == 0 {
-        trace!("skipping roll_iobuf due to empty segment");
+        let waiters =
+            iobufs.flush_waiters.load(std::sync::atomic::Ordering::Relaxed);
+        trace!(
+            "skipping roll_iobuf due to empty segment with {} waiters",
+            waiters
+        );
     } else {
         trace!("sealing ioubuf from  roll_iobuf");
         maybe_seal_and_write_iobuf(iobufs, &iobuf, header, false)?;
@@ -948,6 +960,8 @@ pub(in crate::pagecache) fn make_stable_inner(
     if first_stable >= lsn {
         return Ok(0);
     }
+
+    trace!("first_stable {} < {} lsn", first_stable, lsn);
 
     let mut stable = first_stable;
 
@@ -1011,6 +1025,11 @@ pub(in crate::pagecache) fn make_stable_inner(
         if stable < lsn {
             trace!("waiting on cond var for make_stable({})", lsn);
 
+            let sleepers = iobufs
+                .flush_waiters
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+                + 1;
+
             if cfg!(feature = "event_log") {
                 let timeout = iobufs
                     .interval_updated
@@ -1033,8 +1052,14 @@ pub(in crate::pagecache) fn make_stable_inner(
                     );
                 }
             } else {
+                // TODO: make this ... retrying while observing the stability?
+                trace!("entering asleep while stable {} < {} lsn as the {}th sleeper", stable, lsn, sleepers);
                 iobufs.interval_updated.wait(&mut waiter);
             }
+
+            iobufs
+                .flush_waiters
+                .fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
         } else {
             debug!("make_stable({}) returning", lsn);
             break;
@@ -1050,6 +1075,7 @@ pub(in crate::pagecache) fn make_stable_inner(
 pub(in crate::pagecache) fn flush(iobufs: &Arc<IoBufs>) -> Result<usize> {
     let _cc = concurrency_control::read();
     let max_reserved_lsn = iobufs.max_reserved_lsn.load(Acquire);
+    trace!("flushing to max_reserved_lsn = {}", max_reserved_lsn);
     make_stable(iobufs, max_reserved_lsn)
 }
 
