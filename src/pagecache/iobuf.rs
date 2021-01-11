@@ -958,6 +958,7 @@ pub(in crate::pagecache) fn make_stable_inner(
     // NB before we write the 0th byte of the file, stable  is -1
     let first_stable = iobufs.stable();
     if first_stable >= lsn {
+        trace!("first_stable {} >= {} lsn, done!", first_stable, lsn);
         return Ok(0);
     }
 
