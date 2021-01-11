@@ -4,6 +4,7 @@ use std::sync::{Arc, Barrier};
 use std::thread::Builder as ThreadBuilder;
 use std::time::{Duration, Instant};
 use tempfile::TempDir;
+use tracing::Instrument;
 
 /// Reproduction for issue #1241, just `cargo run --example repro` and you should see a lockup.
 /// After what seems to be a lockup, the process will hang in order to have a debugger attached.
@@ -64,6 +65,8 @@ fn main() {
                         let db = Config::new().create_new(true).path(p).open().unwrap();
                         db.insert("some_key", "any_value").unwrap();
 
+                        drop(_g);
+
                         // moving the barrier above db.insert might make the lockup more rare, but
                         // it is still hit.
                         barrier.wait();
@@ -71,7 +74,7 @@ fn main() {
                         if use_async {
                             let fut = async move {
                                 Verbose(db.flush_async()).await
-                            };
+                            }.instrument(span);
                             // keep the tempdir alive not to remove it on drop (it doesn't seem to matter, but
                             // just to filter it out).
                             (tempdir, Some(handle.spawn(fut)))
