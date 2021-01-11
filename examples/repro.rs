@@ -23,15 +23,15 @@ fn main() {
                     break;
                 }
 
-                println!("{}: start", round);
+                eprintln!("{}: start", round);
                 let last = Instant::now();
 
                 let recv_timeout = Duration::from_secs(1);
                 if let Err(_) = rx.recv_timeout(recv_timeout) {
-                    println!("{}: lockup", round);
+                    eprintln!("{}: lockup", round);
                     return;
                 }
-                println!("{}: {:?}", round, last.elapsed());
+                eprintln!("{}: {:?}", round, last.elapsed());
             }
         })
         .unwrap();
@@ -109,12 +109,14 @@ fn main() {
                 tx.send(()).expect("miraculous recovery: try increasing the recv_timeout from 1s");
 
                 tempdirs.into_iter().for_each(|tempdir| assert!(tempdir.path().exists()));
+
+                eprintln!("----------- round done");
             }
         })
         .unwrap();
 
     watcher.join().unwrap();
-    println!("watcher completed as lockup happened as expected");
+    eprintln!("watcher completed as lockup happened as expected");
 
     let (tx, rx) = std::sync::mpsc::channel();
 
@@ -137,16 +139,16 @@ fn main() {
     rx.recv_timeout(Duration::from_secs(1)).unwrap_err();
 
     // now ready to have a debugger attached
-    println!("---");
+    eprintln!("---");
     if std::env::var_os("RUST_LOG").is_none() {
         println!("RUST_LOG is unset, try setting it to enable logging");
     }
     #[cfg(feature = "testing")]
     {
-        println!("feature \"testing\" detected: note the stacktraces will be different from runs without the feature.");
+        eprintln!("feature \"testing\" detected: note the stacktraces will be different from runs without the feature.");
     }
-    println!("process id: {}", std::process::id());
-    println!("things should be steadily locked up now, entering sleep");
+    eprintln!("process id: {}", std::process::id());
+    eprintln!("things should be steadily locked up now, entering sleep");
 
     rx.recv().unwrap_err();
 
@@ -168,11 +170,11 @@ impl<F: std::future::Future> std::future::Future for Verbose<F> {
         let inner = unsafe { self.map_unchecked_mut(|s| &mut s.0) };
         match inner.poll(cx) {
             Pending => {
-                println!("polled pending: {:p}", pinned);
+                tracing::trace!("polled pending: {:p}", pinned);
                 return Pending;
             }
             Ready(t) => {
-                println!("polled ready: {:p}", pinned);
+                tracing::trace!("polled ready: {:p}", pinned);
                 return Ready(t);
             }
         }
